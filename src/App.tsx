@@ -90,6 +90,10 @@ function App() {
     })
   }
 
+  const startNewGame2 = () => {
+      startNewGame()
+  }
+
   const onSelectLetter = (key: string) => {
     if (currAttempt.letterPos >= 5 || !gameStarted) return
     const newBoard = [...board]
@@ -205,7 +209,7 @@ function App() {
             
             {gameOver.gameOver && (
               <div className="game-controls">
-                <button onClick={startNewGame} className="new-game-button">
+                <button onClick={startNewGame2} className="new-game-button">
                   New Game
                 </button>
               </div>

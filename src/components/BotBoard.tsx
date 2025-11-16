@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { computeGuessStatus } from '../helpers';
+import { computeGuessStatus, generateAcceptableWordSet, generateMainWordSet } from '../helpers';
 
-const getLetterFrequency = (words: string[]) => {
+const getLetterFrequency = (words: Set<string>) => {
   const freq: { [key: string]: number } = {};
   words.forEach(word => {
     const seen = new Set();
@@ -15,12 +15,9 @@ const getLetterFrequency = (words: string[]) => {
   return freq;
 };
 
-// New function to get positional letter frequencies (position 0 to 4)
-const getPositionalLetterFrequency = (words: string[]) => {
+const getPositionalLetterFrequency = (words: Set<string>) => {
   const freq: { [pos: number]: { [letter: string]: number } } = {};
-  for (let i = 0; i < 5; i++) {
-    freq[i] = {};
-  }
+  for (let i = 0; i < 5; i++) freq[i] = {};
   words.forEach(word => {
     for (let i = 0; i < 5; i++) {
       const letter = word[i];
@@ -30,31 +27,26 @@ const getPositionalLetterFrequency = (words: string[]) => {
   return freq;
 };
 
-const scoreWord = (word: string, overallFreq: { [key: string]: number }, positionalFreq: { [pos: number]: { [letter: string]: number } }, remainingWords: string[]) => {
+const scoreWord = (
+  word: string, 
+  overallFreq: { [key: string]: number }, 
+  positionalFreq: { [pos: number]: { [letter: string]: number } }, 
+  remainingWords: Set<string>
+) => {
   const seen = new Set();
   let score = 0;
-
   for (let i = 0; i < 5; i++) {
     const letter = word[i];
     if (!seen.has(letter)) {
-      // Combine overall frequency and positional frequency for scoring
       const posFreq = positionalFreq[i][letter] || 0;
       const ovFreq = overallFreq[letter] || 0;
-      // Weight positional frequency slightly more
       score += ovFreq * 0.4 + posFreq * 0.6;
       seen.add(letter);
     }
   }
-
-  // Bonus for words with unique letters
   const uniqueLetters = new Set(word).size;
   score *= (uniqueLetters / 5);
-
-  // Penalty for repeated letters when many options remain
-  if (remainingWords.length > 10 && uniqueLetters < 5) {
-    score *= 0.8;
-  }
-
+  if (remainingWords.size > 10 && uniqueLetters < 5) score *= 0.8;
   return score;
 };
 
@@ -66,81 +58,70 @@ interface BotBoardProps {
 }
 
 const BotBoard: React.FC<BotBoardProps> = ({ correctWord, playerAttempt, onBotWin, gameStarted }) => {
-  const [botBoard, setBotBoard] = useState<string[][]>(Array(6).fill(null).map(() => Array(5).fill('')));
-  const [botStatus, setBotStatus] = useState<number[][]>(Array(6).fill(null).map(() => Array(5).fill(0)));
-  const [possibleWords, setPossibleWords] = useState<string[]>([]);
+  const [botBoard, setBotBoard] = useState<string[][]>(
+    Array(6).fill(null).map(() => Array(5).fill(''))
+  );
+  const [botStatus, setBotStatus] = useState<number[][]>(
+    Array(6).fill(null).map(() => Array(5).fill(0))
+  );
+  const [possibleWords, setPossibleWords] = useState<Set<string>>(new Set());
   const [botAttempt, setBotAttempt] = useState(0);
   const [botWon, setBotWon] = useState(false);
   const [botLost, setBotLost] = useState(false);
-  const [wordList, setWordList] = useState<string[]>([]);
+  const [wordList, setWordList] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const loadWords = async () => {
-      try {
-        const acceptableResponse = await fetch('/wordle-nytimes-acceptable-bank.txt');
-        const acceptableText = await acceptableResponse.text();
-        const acceptable = acceptableText.toUpperCase().split('\n').map(w => w.trim()).filter(w => w.length === 5);
+    generateAcceptableWordSet().then((words) => {
+      setPossibleWords(words.wordSet)
+    });
 
-        const mainResponse = await fetch('/wordle-nytimes-main-bank.txt');
-        const mainText = await mainResponse.text();
-        const main = mainText.toUpperCase().split('\n').map(w => w.trim()).filter(w => w.length === 5);
-
-        const combinedSet = new Set([...acceptable, ...main]);
-        const combined = Array.from(combinedSet);
-        setWordList(combined);
-        setPossibleWords(combined);
-      } catch (error) {
-        console.error('Error loading word lists:', error);
-        const fallback = ['AROSE', 'SLATE', 'CRANE', 'SLANT', 'CRATE'];
-        setWordList(fallback);
-        setPossibleWords(fallback);
-      }
-    };
-    loadWords();
-  }, []);
-
-  const filterWords = useCallback((words: string[], guess: string, result: number[]): string[] => {
-    return words.filter(word => {
-      const testResult = computeGuessStatus(guess, word);
-      return testResult.every((status, i) => status === result[i]);
+    generateMainWordSet().then((words) => {
+      setWordList(words.wordSet);
     });
   }, []);
 
-  const selectBestGuess = useCallback((words: string[]): string => {
-    if (words.length === 0) return 'AROSE';
-    if (words.length === 1) return words[0];
-
-    if (botAttempt === 0) {
-      const optimalStarts = ['SALET', 'REAST', 'CRATE', 'TRACE', 'SLATE', 'AROSE'];
-      for (const word of optimalStarts) {
-        if (words.includes(word)) return word;
+  const filterWords = useCallback((words: Set<string>, guess: string, result: number[]): Set<string> => {
+    const next = new Set<string>();
+    words.forEach(word => {
+      const testResult = computeGuessStatus(guess, word);
+      if (testResult.every((status, i) => status === result[i])) {
+        next.add(word);
       }
+    });
+    return next;
+  }, []);
+
+  const selectBestGuess = useCallback((words: Set<string>, currentAttempt: number): string => {
+    if (words.size === 0) return 'AROSE';
+    if (words.size === 1) return [...words][0];
+
+    const wordArray = Array.from(words);
+    if (currentAttempt === 0) {
+      const optimalStarts = ['SALET', 'REAST', 'CRATE', 'TRACE', 'SLATE', 'AROSE'];
+      for (const start of optimalStarts) if (words.has(start)) return start;
     }
 
     const overallFreq = getLetterFrequency(words);
     const positionalFreq = getPositionalLetterFrequency(words);
 
-    let bestWord = words[0];
+    let bestWord = wordArray[0];
     let bestScore = scoreWord(bestWord, overallFreq, positionalFreq, words);
-
-    const checkLimit = Math.min(words.length, 100); // Check more words for better selection
+    const checkLimit = Math.min(wordArray.length, 100);
 
     for (let i = 0; i < checkLimit; i++) {
-      const word = words[i];
+      const word = wordArray[i];
       const score = scoreWord(word, overallFreq, positionalFreq, words);
       if (score > bestScore) {
         bestScore = score;
         bestWord = word;
       }
     }
-
     return bestWord;
-  }, [botAttempt]);
+  }, []);
 
   const makeBotGuess = useCallback(() => {
     if (botWon || botLost || botAttempt >= 6 || !gameStarted) return;
-
-    const guess = selectBestGuess(possibleWords);
+    const guess = selectBestGuess(possibleWords, botAttempt);
     const result = computeGuessStatus(guess, correctWord);
 
     const newBoard = [...botBoard];
@@ -166,13 +147,11 @@ const BotBoard: React.FC<BotBoardProps> = ({ correctWord, playerAttempt, onBotWi
   }, [botBoard, botStatus, botAttempt, possibleWords, correctWord, botWon, botLost, gameStarted, filterWords, selectBestGuess, onBotWin]);
 
   useEffect(() => {
-    if (gameStarted && correctWord && playerAttempt > botAttempt && !botWon && !botLost && wordList.length > 0) {
-      const timer = setTimeout(() => {
-        makeBotGuess();
-      }, 500);
+    if (gameStarted && correctWord && playerAttempt > botAttempt && !botWon && !botLost && wordList.size > 0) {
+      const timer = setTimeout(() => makeBotGuess(), 500);
       return () => clearTimeout(timer);
     }
-  }, [playerAttempt, botAttempt, correctWord, botWon, botLost, wordList.length, gameStarted, makeBotGuess]);
+  }, [playerAttempt, botAttempt, correctWord, botWon, botLost, wordList, gameStarted, makeBotGuess]);
 
   useEffect(() => {
     if (!gameStarted) {
@@ -181,14 +160,13 @@ const BotBoard: React.FC<BotBoardProps> = ({ correctWord, playerAttempt, onBotWi
       setBotAttempt(0);
       setBotWon(false);
       setBotLost(false);
-      setPossibleWords(wordList);
+      setPossibleWords(new Set(wordList));
     }
   }, [gameStarted, wordList]);
 
   const getLetterClass = (attemptVal: number, letterPos: number) => {
     const letter = botBoard[attemptVal][letterPos];
     if (!letter) return "letter";
-
     if (botAttempt > attemptVal) {
       const status = botStatus[attemptVal][letterPos];
       if (status === 2) return "letter almost";
@@ -204,8 +182,8 @@ const BotBoard: React.FC<BotBoardProps> = ({ correctWord, playerAttempt, onBotWi
         <h2>🤖 Bot Player</h2>
         {botWon && <span className="bot-status win">Won!</span>}
         {botLost && <span className="bot-status lost">Lost</span>}
-        {!botWon && !botLost && possibleWords.length > 0 && possibleWords.length <= 50 && (
-          <span className="bot-status thinking">{possibleWords.length} possible</span>
+        {!botWon && !botLost && possibleWords.size > 0 && possibleWords.size <= 50 && (
+          <span className="bot-status thinking">{possibleWords.size} possible</span>
         )}
       </div>
       <div className="board">
@@ -219,9 +197,9 @@ const BotBoard: React.FC<BotBoardProps> = ({ correctWord, playerAttempt, onBotWi
           </div>
         ))}
       </div>
-      {possibleWords.length > 0 && possibleWords.length <= 10 && !botWon && !botLost && (
+      {possibleWords.size > 0 && possibleWords.size <= 10 && !botWon && !botLost && (
         <div className="possible-words">
-          <small>Possible: {possibleWords.join(', ')}</small>
+          <small>Possible: {[...possibleWords].join(', ')}</small>
         </div>
       )}
     </div>
