@@ -1,0 +1,17 @@
+{
+  "files": {
+    "main.css": "/wordle-ai-vs-human/static/css/main.33295375.css",
+    "main.js": "/wordle-ai-vs-human/static/js/main.2b885472.js",
+    "static/js/787.00933c7b.chunk.js": "/wordle-ai-vs-human/static/js/787.00933c7b.chunk.js",
+    "static/media/wordle-nytimes-acceptable-bank.txt": "/wordle-ai-vs-human/static/media/wordle-nytimes-acceptable-bank.0acea1c53401a89146ab.txt",
+    "static/media/wordle-nytimes-main-bank.txt": "/wordle-ai-vs-human/static/media/wordle-nytimes-main-bank.bce4b750917abb5456d1.txt",
+    "index.html": "/wordle-ai-vs-human/index.html",
+    "main.33295375.css.map": "/wordle-ai-vs-human/static/css/main.33295375.css.map",
+    "main.2b885472.js.map": "/wordle-ai-vs-human/static/js/main.2b885472.js.map",
+    "787.00933c7b.chunk.js.map": "/wordle-ai-vs-human/static/js/787.00933c7b.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.33295375.css",
+    "static/js/main.2b885472.js"
+  ]
+}
