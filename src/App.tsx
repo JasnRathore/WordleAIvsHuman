@@ -20,6 +20,7 @@ import {
 import Board from "./components/Board"
 import Keyboard from "./components/Keyboard"
 import GameOver from "./components/GameOver"
+import BotBoard from "./components/BotBoard"
 
 export interface IWordleGameContext {
   board: string[][]
@@ -59,9 +60,10 @@ function App() {
     gameOver: false,
     guessedWord: false,
   })
+  const [botWon, setBotWon] = useState(false)
+  const [gameStarted, setGameStarted] = useState(false)
 
-  //const correctWord = "RIGHT";
-  const [correctWord, setCorrectWord] = useState("RIGHT")
+  const [correctWord, setCorrectWord] = useState("")
 
   // generate set once (by empty deps)
   useEffect(() => {
@@ -69,14 +71,27 @@ function App() {
     generateAcceptableWordSet().then((words) => {
       setWordSet(words.wordSet)
     })
-    // to make guesses easier, this is the word bank of "common" words
-    generateMainWordSet().then((wordsy) => {
-      setCorrectWord(getRandomItemFromSet(wordsy.wordSet))
-    })
   }, [])
 
+  const startNewGame = () => {
+    // Generate new word
+    generateMainWordSet().then((wordsy) => {
+      const newWord = getRandomItemFromSet(wordsy.wordSet)
+      setCorrectWord(newWord)
+      
+      // Reset game state
+      setBoard(boardDefault)
+      setBoardStatus(boardStatusDefault)
+      setCurrAttempt({ attempt: 0, letterPos: 0 })
+      setLetterStatus(new Map())
+      setGameOver({ gameOver: false, guessedWord: false })
+      setBotWon(false)
+      setGameStarted(true)
+    })
+  }
+
   const onSelectLetter = (key: string) => {
-    if (currAttempt.letterPos >= 5) return
+    if (currAttempt.letterPos >= 5 || !gameStarted) return
     const newBoard = [...board]
     newBoard[currAttempt.attempt][currAttempt.letterPos] = key
     setBoard(newBoard)
@@ -84,7 +99,7 @@ function App() {
   }
 
   const onDelete = () => {
-    if (currAttempt.letterPos === 0) return
+    if (currAttempt.letterPos === 0 || !gameStarted) return
     const newBoard = [...board]
     newBoard[currAttempt.attempt][currAttempt.letterPos - 1] = ""
     setBoard(newBoard)
@@ -92,7 +107,7 @@ function App() {
   }
 
   const onEnter = () => {
-    if (currAttempt.letterPos !== 5) return
+    if (currAttempt.letterPos !== 5 || !gameStarted) return
 
     let currWord = board[currAttempt.attempt].join("").toUpperCase()
     if (!wordSet.has(currWord)) return alert("Word not found")
@@ -126,6 +141,10 @@ function App() {
     }
   }
 
+  const handleBotWin = () => {
+    setBotWon(true)
+  }
+
   return (
     <div className="App">
       <nav>
@@ -149,10 +168,66 @@ function App() {
           setGameOver,
         }}
       >
-        <div className="game">
-          <Board />
-          {gameOver.gameOver ? <GameOver /> : <Keyboard />}
-        </div>
+        {!gameStarted ? (
+          <div className="start-screen">
+            <div className="start-content">
+              <h2>Welcome to Wordle!</h2>
+              <p>Race against the bot to guess the 5-letter word</p>
+              <button onClick={startNewGame} className="start-button">
+                Start Game
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="game-container">
+              <div className="player-section">
+                <div className="section-header">
+                  <h2>👤 You</h2>
+                  {gameOver.guessedWord && <span className="win-badge">Won!</span>}
+                  {gameOver.gameOver && !gameOver.guessedWord && <span className="lost-badge">Lost</span>}
+                </div>
+                <div className="game">
+                  <Board />
+                  {gameOver.gameOver ? <GameOver /> : <Keyboard />}
+                </div>
+              </div>
+              
+              <div className="bot-section">
+                <BotBoard 
+                  correctWord={correctWord} 
+                  playerAttempt={currAttempt.attempt}
+                  onBotWin={handleBotWin}
+                  gameStarted={gameStarted}
+                />
+              </div>
+            </div>
+            
+            {gameOver.gameOver && (
+              <div className="game-controls">
+                <button onClick={startNewGame} className="new-game-button">
+                  New Game
+                </button>
+              </div>
+            )}
+            
+            {botWon && gameOver.guessedWord && (
+              <div className="result-banner tie">
+                🤝 It's a tie!
+              </div>
+            )}
+            {botWon && !gameOver.guessedWord && (
+              <div className="result-banner bot-wins">
+                🤖 Bot wins!
+              </div>
+            )}
+            {!botWon && gameOver.guessedWord && (
+              <div className="result-banner player-wins">
+                🎉 You win!
+              </div>
+            )}
+          </>
+        )}
       </AppContext.Provider>
     </div>
   )
